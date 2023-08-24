@@ -17,6 +17,16 @@ type fakeDeleteEntity struct {
 	FakeDelete bool
 }
 
+type fakeDeleteEntityWithUnique struct {
+	beeorm.ORM
+	ID               uint64
+	Name             string              `orm:"unique=name:1;required"`
+	Age              int                 `orm:"index=AgeWeight"`
+	Weight           int                 `orm:"index=AgeWeight:2"`
+	FakeDelete       bool                `orm:"unique=name:2"`
+	CachedQueryEmail *beeorm.CachedQuery `queryOne:":Name = ? AND :FakeDelete = ?"`
+}
+
 type noFakeDeleteEntity struct {
 	beeorm.ORM
 	ID   uint64
@@ -35,12 +45,14 @@ func testFakeDelete(t *testing.T, mySQLVersion int) {
 	registry := &beeorm.Registry{}
 	registry.RegisterPlugin(Init(nil))
 	var entity *fakeDeleteEntity
+	var entityUnique *fakeDeleteEntityWithUnique
 	var entityNoFakeDelete *noFakeDeleteEntity
-	engine := beeorm.PrepareTables(t, registry, mySQLVersion, 6, "", entity, entityNoFakeDelete)
+	engine := beeorm.PrepareTables(t, registry, mySQLVersion, 6, "", entity, entityNoFakeDelete, entityUnique)
 	engine.GetMysql().Query("DROP TABLE `fakeDeleteEntity`")
 	engine.GetMysql().Query("DROP TABLE `noFakeDeleteEntity`")
+	engine.GetMysql().Query("DROP TABLE `fakeDeleteEntityWithUnique`")
 	alters := engine.GetAlters()
-	assert.Len(t, alters, 2)
+	assert.Len(t, alters, 3)
 	if mySQLVersion == 5 {
 		assert.Equal(t, "CREATE TABLE `test`.`noFakeDeleteEntity` (\n  `ID` bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n  `Name` varchar(255) DEFAULT NULL,\n PRIMARY KEY (`ID`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;", alters[0].SQL)
 		assert.Equal(t, "CREATE TABLE `test`.`fakeDeleteEntity` (\n  `ID` bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n  `Name` varchar(255) NOT NULL DEFAULT '',\n  `Age` int(11) NOT NULL DEFAULT '0',\n  `Weight` int(11) NOT NULL DEFAULT '0',\n  `FakeDelete` bigint(20) unsigned NOT NULL,\n  INDEX `AgeWeight` (`Age`,`Weight`,`FakeDelete`),\n  INDEX `FakeDelete` (`FakeDelete`),\n  UNIQUE INDEX `name` (`Name`,`FakeDelete`),\n PRIMARY KEY (`ID`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;", alters[1].SQL)
@@ -50,6 +62,7 @@ func testFakeDelete(t *testing.T, mySQLVersion int) {
 	}
 	alters[0].Exec(engine)
 	alters[1].Exec(engine)
+	alters[2].Exec(engine)
 	assert.Len(t, engine.GetAlters(), 0)
 
 	entity = &fakeDeleteEntity{ID: 17557, Name: "A", Age: 10, Weight: 180}

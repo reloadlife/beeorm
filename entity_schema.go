@@ -13,7 +13,7 @@ import (
 
 type CachedQuery struct{}
 
-type cachedQueryDefinition struct {
+type CachedQueryDefinition struct {
 	Max           int
 	Query         string
 	TrackedFields []string
@@ -91,6 +91,7 @@ type EntitySchema interface {
 	GetReferences() []EntitySchemaReference
 	GetColumns() []string
 	GetUniqueIndexes() map[string][]string
+	GetCacheQueries() map[string]*CachedQueryDefinition
 	GetSchemaChanges(engine Engine) (has bool, alters []Alter)
 	GetUsage(registry ValidatedRegistry) map[reflect.Type][]string
 	GetTag(field, key, trueValue, defaultValue string) string
@@ -111,9 +112,9 @@ type entitySchema struct {
 	registry                   *validatedRegistry
 	fieldsQuery                string
 	tags                       map[string]map[string]string
-	cachedIndexes              map[string]*cachedQueryDefinition
-	cachedIndexesOne           map[string]*cachedQueryDefinition
-	cachedIndexesAll           map[string]*cachedQueryDefinition
+	cachedIndexes              map[string]*CachedQueryDefinition
+	cachedIndexesOne           map[string]*CachedQueryDefinition
+	cachedIndexesAll           map[string]*CachedQueryDefinition
 	cachedIndexesTrackedFields map[string]bool
 	columnNames                []string
 	columnMapping              map[string]int
@@ -255,6 +256,10 @@ func (entitySchema *entitySchema) GetUniqueIndexes() map[string][]string {
 	return data
 }
 
+func (entitySchema *entitySchema) GetCacheQueries() map[string]*CachedQueryDefinition {
+	return entitySchema.cachedIndexesAll
+}
+
 func (entitySchema *entitySchema) GetSchemaChanges(engine Engine) (has bool, alters []Alter) {
 	pre, alters, post := getSchemaChanges(engine.(*engineImplementation), entitySchema)
 	final := pre
@@ -317,9 +322,9 @@ func (entitySchema *entitySchema) init(registry *Registry, entityType reflect.Ty
 		cachePrefix = entitySchema.mysqlPoolName
 	}
 	cachePrefix += entitySchema.tableName
-	cachedQueries := make(map[string]*cachedQueryDefinition)
-	cachedQueriesOne := make(map[string]*cachedQueryDefinition)
-	cachedQueriesAll := make(map[string]*cachedQueryDefinition)
+	cachedQueries := make(map[string]*CachedQueryDefinition)
+	cachedQueriesOne := make(map[string]*CachedQueryDefinition)
+	cachedQueriesAll := make(map[string]*CachedQueryDefinition)
 	cachedQueriesTrackedFields := make(map[string]bool)
 	for key, values := range entitySchema.tags {
 		isOne := false
@@ -373,11 +378,11 @@ func (entitySchema *entitySchema) init(registry *Registry, entityType reflect.Ty
 			}
 
 			if !isOne {
-				def := &cachedQueryDefinition{50000, query, fieldsTracked, fieldsQuery, fieldsOrder}
+				def := &CachedQueryDefinition{50000, query, fieldsTracked, fieldsQuery, fieldsOrder}
 				cachedQueries[key] = def
 				cachedQueriesAll[key] = def
 			} else {
-				def := &cachedQueryDefinition{1, query, fieldsTracked, fieldsQuery, fieldsOrder}
+				def := &CachedQueryDefinition{1, query, fieldsTracked, fieldsQuery, fieldsOrder}
 				cachedQueriesOne[key] = def
 				cachedQueriesAll[key] = def
 			}
